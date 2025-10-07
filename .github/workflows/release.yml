@@ -2,6 +2,9 @@ name: Release
 
 on: push
 
+env:
+  COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+
 jobs:
   release:
     runs-on: windows-latest
@@ -11,21 +14,32 @@ jobs:
       # https://stackoverflow.com/questions/58862864/github-actions-ci-conditional-regex#58869470
       # \d to match a digit is supported on macOS, but not on Linux - use [0-9]
         run: |
-          if [[ ${{ github.event.head_commit.message }} =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          if [[ $COMMIT_MESSAGE =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
               echo "match=true" >> $GITHUB_OUTPUT
           fi
         shell: bash
+      - name: Set Git to use LF
+        if: steps.check-commit-message.outputs.match == 'true'
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
       - name: Checkout
         uses: actions/checkout@v5
         if: steps.check-commit-message.outputs.match == 'true'
       - name: Push Tag
         if: steps.check-commit-message.outputs.match == 'true'
         run: |
-          git tag ${{ github.event.head_commit.message }}
-          git push origin tag ${{ github.event.head_commit.message }}
+          git tag $COMMIT_MESSAGE
+          git push origin tag $COMMIT_MESSAGE
         shell: bash
       - name: Build
         if: steps.check-commit-message.outputs.match == 'true'
+        # package_version=$(node -e 'console.log(require("./package.json").version)')
+        # package_version=${COMMIT_MESSAGE/v}
         run: |
-          npm -v
+          npm ci \
+          && npm run package \
+          && gh release create $COMMIT_MESSAGE --generate-notes --notes "[Download VSIX package](https://marketplace.visualstudio.com/_apis/public/gallery/publishers/thqby/vsextensions/vscode-autohotkey2-lsp/${COMMIT_MESSAGE/v}/vspackage)" vscode-autohotkey2-lsp-${COMMIT_MESSAGE/v}.vsix
         shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
