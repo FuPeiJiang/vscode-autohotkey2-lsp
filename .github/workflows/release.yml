@@ -1,15 +1,31 @@
-name: Create Release
+name: Release
 
-on:
-  push:
-    tags: [v*]
+on: push
+
 jobs:
-  build:
-    runs-on: ubuntu-latest
+  release:
+    runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v3
-      - env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG_NAME: ${{ github.ref_name }}
-        run: gh release create $TAG_NAME --generate-notes --notes "[Download VSIX package](https://marketplace.visualstudio.com/_apis/public/gallery/publishers/thqby/vsextensions/vscode-autohotkey2-lsp/${TAG_NAME/v}/vspackage)"
+      - name: Check Commit Message
+        id: check-commit-message
+      # https://stackoverflow.com/questions/58862864/github-actions-ci-conditional-regex#58869470
+      # \d to match a digit is supported on macOS, but not on Linux - use [0-9]
+        run: |
+          if [[ ${{ github.event.head_commit.message }} =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "match=true" >> $GITHUB_OUTPUT
+          fi
+        shell: bash
+      - name: Checkout
+        uses: actions/checkout@v5
+        if: steps.check-commit-message.outputs.match == 'true'
+      - name: Push Tag
+        if: steps.check-commit-message.outputs.match == 'true'
+        run: |
+          git tag ${{ github.event.head_commit.message }}
+          git push origin tag ${{ github.event.head_commit.message }}
+        shell: bash
+      - name: Build
+        if: steps.check-commit-message.outputs.match == 'true'
+        run: |
+          npm -v
         shell: bash
